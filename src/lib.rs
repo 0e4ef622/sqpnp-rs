@@ -9,36 +9,36 @@ use crate::types::NearestRotationMethod;
 pub mod types;
 mod sqpnp;
 
-pub const SQRT3: f64 = 1.732050807568877293527446341505872367_f64;
+pub const SQRT3: f32 = 1.732050807568877293527446341505872367_f32;
 
 #[allow(non_snake_case)]
 pub struct PnpSolver<'input> {
-    projections: &'input [Vector2<f64>],
-    points: &'input [Vector3<f64>],
-    weights: &'input [f64],
+    projections: &'input [Vector2<f32>],
+    points: &'input [Vector3<f32>],
+    weights: &'input [f32],
     parameters: SolverParameters,
 
-    omega: SMatrix<f64, 9, 9>,
+    omega: SMatrix<f32, 9, 9>,
 
-    s: SMatrix<f64, 9, 1>,
-    U: SMatrix<f64, 9, 9>,
-    P: SMatrix<f64, 3, 9>,
-    point_mean: Vector3<f64>,
+    s: SMatrix<f32, 9, 1>,
+    U: SMatrix<f32, 9, 9>,
+    P: SMatrix<f32, 3, 9>,
+    point_mean: Vector3<f32>,
 
     num_null_vectors: i32,
     solutions: [SQPSolution; 18],
     num_solutions: usize,
-    nearest_rotation_matrix: fn(&SMatrix<f64, 9, 1>, &mut SMatrix<f64, 9, 1>),
+    nearest_rotation_matrix: fn(&SMatrix<f32, 9, 1>, &mut SMatrix<f32, 9, 1>),
 }
 
 impl<'input> PnpSolver<'input> {
-    pub fn omega(&self) -> &SMatrix<f64, 9, 9> {
+    pub fn omega(&self) -> &SMatrix<f32, 9, 9> {
         &self.omega
     }
-    pub fn eigen_vectors(&self) -> &SMatrix<f64, 9, 9> {
+    pub fn eigen_vectors(&self) -> &SMatrix<f32, 9, 9> {
         &self.U
     }
-    pub fn eigen_values(&self) -> &SMatrix<f64, 9, 1> {
+    pub fn eigen_values(&self) -> &SMatrix<f32, 9, 1> {
         &self.s
     }
     pub fn null_space_dimension(&self) -> i32 {
@@ -58,7 +58,7 @@ impl<'input> PnpSolver<'input> {
     /// Return average reprojection errors
     ///
     /// Panics if `errors.len() < self.number_of_solutions()`.
-    pub fn average_squared_projection_errors(&self, errors: &mut [f64]) {
+    pub fn average_squared_projection_errors(&self, errors: &mut [f32]) {
         assert!(errors.len() >= self.num_solutions);
         for i in 0..self.num_solutions {
             errors[i] = self.average_squared_projection_error(i)
@@ -68,9 +68,9 @@ impl<'input> PnpSolver<'input> {
     /// Constructor (initializes Omega, P and U, s, i.e. the decomposition of Omega)
     #[allow(non_snake_case)]
     pub fn new(
-        points: &'input [Vector3<f64>],
-        projections: &'input [Vector2<f64>],
-        weights: Option<&'input [f64]>,
+        points: &'input [Vector3<f32>],
+        projections: &'input [Vector2<f32>],
+        weights: Option<&'input [f32]>,
         parameters: SolverParameters,
     ) -> Option<Self> {
         let n = points.len();
@@ -84,12 +84,12 @@ impl<'input> PnpSolver<'input> {
         }
 
         let mut num_null_vectors = -1;
-        let mut omega = SMatrix::<f64, 9, 9>::zeros();
+        let mut omega = SMatrix::<f32, 9, 9>::zeros();
         let mut sum_wx @ mut sum_wy @ mut sum_wx2_plus_wy2 @ mut sum_w = 0.0;
 
         let mut sum_wX @ mut sum_wY @ mut sum_wZ = 0.0;
 
-        let mut QA = SMatrix::<f64, 3, 9>::zeros();
+        let mut QA = SMatrix::<f32, 3, 9>::zeros();
 
         for i in 0..n {
             let w = *weights.get(i).unwrap_or(&1.0);
@@ -195,7 +195,7 @@ impl<'input> PnpSolver<'input> {
       
         // Qinv = inv( Q ) = inv( Sum( Qi) )
         // let Qinv = Q.try_inverse().unwrap();
-        let mut Qinv = SMatrix::<f64, 3, 3>::zeros();
+        let mut Qinv = SMatrix::<f32, 3, 3>::zeros();
         invert_symmetric_3x3(Q, &mut Qinv);
 
         // Compute P = -inv( Sum(wi*Qi) ) * Sum( wi*Qi*Ai ) = -Qinv * QA
@@ -279,7 +279,7 @@ impl<'input> PnpSolver<'input> {
 }
 
 impl PnpSolver<'_> {
-    fn average_squared_projection_error(&self, index: usize) -> f64 {
+    fn average_squared_projection_error(&self, index: usize) -> f32 {
         let mut avg = 0.0;
         let r = &self.solutions[index].r_hat;
         let t = &self.solutions[index].t;
@@ -296,7 +296,7 @@ impl PnpSolver<'_> {
             avg += dx*dx + dy*dy;
         }
 
-        return avg / self.points.len() as f64;
+        return avg / self.points.len() as f32;
     }
 
     /// Test cheirality on the mean point for a given solution
@@ -330,7 +330,7 @@ impl PnpSolver<'_> {
 
 
 /// Determinant of 3x3 matrix stored as a 9x1 vector in *row-major* order
-fn determinant_9x1(r: &SMatrix<f64, 9, 1>) -> f64 {
+fn determinant_9x1(r: &SMatrix<f32, 9, 1>) -> f32 {
     (r[0]*r[4]*r[8] + r[1]*r[5]*r[6] + r[2]*r[3]*r[7]) - (r[6]*r[4]*r[2] + r[7]*r[5]*r[0] + r[8]*r[3]*r[1])
 }
 
@@ -338,8 +338,8 @@ fn determinant_9x1(r: &SMatrix<f64, 9, 1>) -> f64 {
 /// Invert a 3x3 symmetric matrix (using low triangle values only)
 #[allow(non_snake_case)]
 fn invert_symmetric_3x3(
-    Q: SMatrix<f64, 3, 3>,
-    Qinv: &mut SMatrix<f64, 3, 3>,
+    Q: SMatrix<f32, 3, 3>,
+    Qinv: &mut SMatrix<f32, 3, 3>,
 ) -> bool {
     let det_threshold = 1e-10;
     // 1. Get the elements of the matrix
@@ -383,7 +383,7 @@ fn invert_symmetric_3x3(
 /// Simple SVD - based nearest rotation matrix. Argument should be a *row-major* matrix representation.
 /// Returns a row-major vector representation of the nearest rotation matrix.
 #[allow(non_snake_case)]
-fn nearest_rotation_matrix_svd(e: &SMatrix<f64, 9, 1>, r: &mut SMatrix<f64, 9, 1>) {
+fn nearest_rotation_matrix_svd(e: &SMatrix<f32, 9, 1>, r: &mut SMatrix<f32, 9, 1>) {
     let E = e.reshape_generic(Const::<3>, Const::<3>);
     let svd = E.svd(true, true);
     let detUV = svd.u.unwrap().determinant() * svd.v_t.unwrap().determinant();
@@ -407,7 +407,7 @@ fn nearest_rotation_matrix_svd(e: &SMatrix<f64, 9, 1>, r: &mut SMatrix<f64, 9, 1
 ///  Heraklion, Crete, Greece.
 /// 
 #[allow(non_snake_case)]
-fn nearest_rotation_matrix_foam(e: &SMatrix<f64, 9, 1>, r: &mut SMatrix<f64, 9, 1>) {
+fn nearest_rotation_matrix_foam(e: &SMatrix<f32, 9, 1>, r: &mut SMatrix<f32, 9, 1>) {
     let mut i;
     let B = e;
     let (mut l, mut lprev, detB, Bsq, adjBsq);
@@ -505,7 +505,7 @@ fn nearest_rotation_matrix_foam(e: &SMatrix<f64, 9, 1>, r: &mut SMatrix<f64, 9, 
 
 /// Produce a distance from being orthogonal for a random 3x3 matrix
 /// Matrix is provided as a vector
-fn orthogonality_error(a: &SMatrix<f64, 9, 1>) -> f64 {
+fn orthogonality_error(a: &SMatrix<f32, 9, 1>) -> f32 {
     let sq_norm_a1 = a[0]*a[0] + a[1]*a[1] + a[2]*a[2];
     let sq_norm_a2 = a[3]*a[3] + a[4]*a[4] + a[5]*a[5];
     let sq_norm_a3 = a[6]*a[6] + a[7]*a[7] + a[8]*a[8];

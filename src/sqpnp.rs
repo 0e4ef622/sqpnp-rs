@@ -5,7 +5,7 @@ use crate::{PnpSolver, types::SQPSolution, SQRT3, orthogonality_error, determina
 
 
 impl PnpSolver<'_> {
-    fn handle_solution(&mut self, solution: &mut SQPSolution, min_sq_error: &mut f64) {
+    fn handle_solution(&mut self, solution: &mut SQPSolution, min_sq_error: &mut f32) {
         let cheirok = self.test_positive_depth( solution ) || self.test_positive_majority_depths ( solution ); // check the majority if the check with centroid fails
         if cheirok {
             solution.sq_error = ( self.omega * solution.r_hat ).dot( &solution.r_hat );
@@ -40,7 +40,7 @@ impl PnpSolver<'_> {
 
     /// Solve the PnP 
     pub fn solve(&mut self) -> bool {
-        let mut min_sq_error = f64::MAX;
+        let mut min_sq_error = f32::MAX;
         let num_eigen_points = if self.num_null_vectors > 0 { self.num_null_vectors as usize } else { 1 };
         // clear solutions
         self.num_solutions = 0;
@@ -95,11 +95,11 @@ impl PnpSolver<'_> {
         true
     }
 
-    fn run_sqp(&mut self, r0: &SMatrix<f64, 9, 1>) -> SQPSolution {
+    fn run_sqp(&mut self, r0: &SMatrix<f32, 9, 1>) -> SQPSolution {
         let mut r = *r0;
 
-        let mut delta_squared_norm = f64::MAX;
-        let mut delta = SMatrix::<f64, 9, 1>::zeros();
+        let mut delta_squared_norm = f32::MAX;
+        let mut delta = SMatrix::<f32, 9, 1>::zeros();
         let mut step = 0;
 
         while delta_squared_norm > self.parameters.sqp_squared_tolerance && step < self.parameters.sqp_max_iteration {
@@ -128,7 +128,7 @@ impl PnpSolver<'_> {
     }
 
     #[allow(non_snake_case)]
-    fn solve_sqpsystem(&mut self, r: &SMatrix<f64, 9, 1>, delta: &mut SMatrix<f64, 9, 1>) {
+    fn solve_sqpsystem(&mut self, r: &SMatrix<f32, 9, 1>, delta: &mut SMatrix<f32, 9, 1>) {
         let sqnorm_r1 = r[0]*r[0] + r[1]*r[1] + r[2]*r[2];
         let sqnorm_r2 = r[3]*r[3] + r[4]*r[4] + r[5]*r[5];
         let sqnorm_r3 = r[6]*r[6] + r[7]*r[7] + r[8]*r[8];
@@ -138,9 +138,9 @@ impl PnpSolver<'_> {
 
         // Obtain 6D normal (H) and 3D null space of the constraint Jacobian-J at the estimate (r)
         // NOTE: This is done via Gram-Schmidt orthogonalization
-        let mut N = SMatrix::<f64, 9, 3>::zeros();  // Null space of J
-        let mut H = SMatrix::<f64, 9, 6>::zeros();  // Row space of J
-        let mut JH = SMatrix::<f64, 6, 6>::zeros(); // The lower triangular matrix J*Q
+        let mut N = SMatrix::<f32, 9, 3>::zeros();  // Null space of J
+        let mut H = SMatrix::<f32, 9, 6>::zeros();  // Row space of J
+        let mut JH = SMatrix::<f32, 6, 6>::zeros(); // The lower triangular matrix J*Q
 
         row_and_null_space(r, &mut H, &mut N, &mut JH, None);
 
@@ -156,9 +156,9 @@ impl PnpSolver<'_> {
         //						   -r1'*r3 ];
         // Eigen::Matrix<double, 6, 1> g; 
         // g[0] = 1 - sqnorm_r1; g[1] = 1 - sqnorm_r2; g[2] = 1 - sqnorm_r3; g[3] = -dot_r1r2; g[4] = -dot_r2r3; g[5] = -dot_r1r3;
-        let g = SMatrix::<f64, 6, 1>::new(1. - sqnorm_r1, 1. - sqnorm_r2, 1. - sqnorm_r3, -dot_r1r2, -dot_r2r3, -dot_r1r3);
+        let g = SMatrix::<f32, 6, 1>::new(1. - sqnorm_r1, 1. - sqnorm_r2, 1. - sqnorm_r3, -dot_r1r2, -dot_r2r3, -dot_r1r3);
 
-        let mut x = SMatrix::<f64, 6, 1>::zeros();
+        let mut x = SMatrix::<f32, 6, 1>::zeros();
         x[0] = g[0] / JH[(0, 0)];
         x[1] = g[1] / JH[(1, 1)];
         x[2] = g[2] / JH[(2, 2)];
@@ -195,11 +195,11 @@ impl PnpSolver<'_> {
 /// NOTE: K is lower-triangular, so upper triangle may contain trash (is not filled by the function)...
 #[allow(non_snake_case)]
 fn row_and_null_space(
-    r: &SMatrix<f64, 9, 1>, 
-    H: &mut SMatrix<f64, 9, 6>, // Row space 
-    N: &mut SMatrix<f64, 9, 3>, // Null space
-    K: &mut SMatrix<f64, 6, 6>,  // J*Q (J - Jacobian of constraints)
-    norm_threshold: Option<f64>, // Used to discard columns of Pn when finding null space
+    r: &SMatrix<f32, 9, 1>, 
+    H: &mut SMatrix<f32, 9, 6>, // Row space 
+    N: &mut SMatrix<f32, 9, 3>, // Null space
+    K: &mut SMatrix<f32, 6, 6>,  // J*Q (J - Jacobian of constraints)
+    norm_threshold: Option<f32>, // Used to discard columns of Pn when finding null space
 ) { // threshold for column vector norm (of Pn)
     let norm_threshold = norm_threshold.unwrap_or(0.1);
     // Applying Gram-Schmidt orthogonalization on the Jacobian. 
@@ -208,19 +208,19 @@ fn row_and_null_space(
     *H = SMatrix::zeros();
 
     // 1. q1
-    let norm_r1 = f64::sqrt( r[0]*r[0] + r[1]*r[1] + r[2]*r[2] );
+    let norm_r1 = f32::sqrt( r[0]*r[0] + r[1]*r[1] + r[2]*r[2] );
     let inv_norm_r1 = if norm_r1 > 1e-5 { 1.0 / norm_r1 } else { 0.0 };
     H[(0, 0)] = r[0] * inv_norm_r1; H[(1, 0)] = r[1] * inv_norm_r1; H[(2, 0)] = r[2] * inv_norm_r1;
     K[(0, 0)] = 2.*norm_r1;
 
     // 2. q2 
-    let norm_r2 = f64::sqrt( r[3]*r[3] + r[4]*r[4] + r[5]*r[5] );
+    let norm_r2 = f32::sqrt( r[3]*r[3] + r[4]*r[4] + r[5]*r[5] );
     let inv_norm_r2 = 1.0 / norm_r2;
     H[(3, 1)] = r[3]*inv_norm_r2; H[(4, 1)] = r[4]*inv_norm_r2; H[(5, 1)] = r[5]*inv_norm_r2;
     K[(1, 0)] = 0.; K[(1, 1)] = 2.*norm_r2;
 
     // 3. q3 = (r3'*q2)*q2 - (r3'*q1)*q1 ; q3 = q3/norm(q3)
-    let norm_r3 = f64::sqrt( r[6]*r[6] + r[7]*r[7] + r[8]*r[8] );
+    let norm_r3 = f32::sqrt( r[6]*r[6] + r[7]*r[7] + r[8]*r[8] );
     let inv_norm_r3 = 1.0 / norm_r3;
     H[(6, 2)] = r[6]*inv_norm_r3; H[(7, 2)] = r[7]*inv_norm_r3; H[(8, 2)] = r[8]*inv_norm_r3;
     K[(2, 0)] = 0.; K[(2, 1)] = 0.; K[(2, 2)] = 2.*norm_r3;
@@ -231,7 +231,7 @@ fn row_and_null_space(
 
     H[(0, 3)] = r[3] - dot_j4q1*H[(0, 0)]; H[(1, 3)] = r[4] - dot_j4q1*H[(1, 0)]; H[(2, 3)] = r[5] - dot_j4q1*H[(2, 0)];
     H[(3, 3)] = r[0] - dot_j4q2*H[(3, 1)]; H[(4, 3)] = r[1] - dot_j4q2*H[(4, 1)]; H[(5, 3)] = r[2] - dot_j4q2*H[(5, 1)];
-    let inv_norm_j4 = 1.0 / f64::sqrt( H[(0, 3)]*H[(0, 3)] + H[(1, 3)]*H[(1, 3)] + H[(2, 3)]*H[(2, 3)] + 
+    let inv_norm_j4 = 1.0 / f32::sqrt( H[(0, 3)]*H[(0, 3)] + H[(1, 3)]*H[(1, 3)] + H[(2, 3)]*H[(2, 3)] + 
         H[(3, 3)]*H[(3, 3)] + H[(4, 3)]*H[(4, 3)] + H[(5, 3)]*H[(5, 3)] );
 
     H[(0, 3)] *= inv_norm_j4; H[(1, 3)] *= inv_norm_j4; H[(2, 3)] *= inv_norm_j4;
@@ -284,7 +284,7 @@ fn row_and_null_space(
     // Great! Now H is an orthogonalized, sparse basis of the Jacobian row space and K is filled.
     //
     // Now get a projector onto the null space of H:
-    let Pn = SMatrix::<f64, 9, 9>::identity() - ( *H*H.transpose() ); 
+    let Pn = SMatrix::<f32, 9, 9>::identity() - ( *H*H.transpose() ); 
 
     // Now we need to pick 3 columns of P with non-zero norm (> 0.3) and some angle between them (> 0.3).
     //
@@ -292,9 +292,9 @@ fn row_and_null_space(
     let mut index1 = usize::MAX;
     let mut index2 = usize::MAX;
     let mut index3 = usize::MAX;
-    let mut max_norm1 = f64::MIN;
-    let mut min_dot12 = f64::MAX;
-    let mut min_dot1323 = f64::MAX;
+    let mut max_norm1 = f32::MIN;
+    let mut min_dot12 = f32::MAX;
+    let mut min_dot1323 = f32::MAX;
 
 
     let mut col_norms = [0.0; 9];
@@ -314,7 +314,7 @@ fn row_and_null_space(
     for i in 0..9 {
         //if i == index1 { continue; }
         if col_norms[i] >= norm_threshold {
-            let cos_v1_x_col = f64::abs(Pn.column(i).dot(&v1) / col_norms[i]);
+            let cos_v1_x_col = f32::abs(Pn.column(i).dot(&v1) / col_norms[i]);
 
             if cos_v1_x_col <= min_dot12 {
                 index2 = i;
@@ -332,8 +332,8 @@ fn row_and_null_space(
         //if i == index2 || i == index1 { continue; }
         if col_norms[i] >= norm_threshold {
             let inv_norm = 1.0 / col_norms[i];
-            let cos_v1_x_col = f64::abs(Pn.column(i).dot(&v1) * inv_norm);
-            let cos_v2_x_col = f64::abs(Pn.column(i).dot(&v2) * inv_norm);
+            let cos_v1_x_col = f32::abs(Pn.column(i).dot(&v1) * inv_norm);
+            let cos_v2_x_col = f32::abs(Pn.column(i).dot(&v2) * inv_norm);
 
             if cos_v1_x_col + cos_v2_x_col <= min_dot1323 {
                 index3 = i;
@@ -361,7 +361,7 @@ fn row_and_null_space(
 // see http://euler.nmt.edu/~brian/ldlt.html
 //
 #[allow(non_snake_case)]
-fn axb_solve_ldlt_3x3(A: &SMatrix<f64, 3, 3>, b: &SMatrix<f64, 3, 1>, x: &mut SMatrix<f64, 3, 1>) -> i32 {
+fn axb_solve_ldlt_3x3(A: &SMatrix<f32, 3, 3>, b: &SMatrix<f32, 3, 1>, x: &mut SMatrix<f32, 3, 1>) -> i32 {
     let mut L = [0.0; 3 * 3];
     let mut v = [0.0; 2];
 
